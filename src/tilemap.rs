@@ -1,9 +1,6 @@
 use crate::{ascii::AsciiSheet, TILE_SIZE};
 use bevy::prelude::*;
-use std::{
-	fs::File,
-	io::{prelude::*, BufReader},
-};
+use indoc::indoc;
 
 #[derive(Component)]
 pub struct TileCollider;
@@ -17,16 +14,19 @@ impl Plugin for TileMapPluging {
 }
 
 fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
-	let map_file = File::open("assets/map.txt").expect("No map file found");
-	let reader = BufReader::new(map_file);
+	let map = indoc! {"
+		##############
+		#......#.....#
+		#............#
+		#....######..#
+		#....#....#..#
+		#.........#..#
+		##############
+	"};
 
-	let tiles: Vec<_> = reader
+	let tiles: Vec<_> = map
 		.lines()
 		.enumerate()
-		.filter_map(|(y, line)| match line {
-			Ok(line) => Some((y, line)),
-			Err(_) => None,
-		})
 		.flat_map(|(y, line)| {
 			// TODO(pope): Figure out how to avoid the collect allocation.
 			// Maybe the most efficient thing to do here is a nesed for-loop

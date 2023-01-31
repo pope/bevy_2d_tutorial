@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bevy = "0.9.1"
 bevy-inspector-egui = "0.17.0"
+indoc = "2.0.0"
 
 [profile.dev]
 opt-level = 1
