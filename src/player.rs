@@ -77,18 +77,17 @@ fn wall_collision_check(
 	target_player_pos: Vec3,
 	wall_query: &WallQuery,
 ) -> bool {
-	for wall_transform in wall_query.iter() {
-		let collision = collide(
-			target_player_pos,
-			Vec2::splat(TILE_SIZE * 0.9),
-			wall_transform.0.translation,
-			Vec2::splat(TILE_SIZE),
-		);
-		if collision.is_some() {
-			return false;
-		}
-	}
-	true
+	wall_query
+		.iter()
+		.map(|wall_transform| {
+			collide(
+				target_player_pos,
+				Vec2::splat(TILE_SIZE * 0.9),
+				wall_transform.0.translation,
+				Vec2::splat(TILE_SIZE),
+			)
+		})
+		.all(|collision| collision.is_none())
 }
 
 fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
