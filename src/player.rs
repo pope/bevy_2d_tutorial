@@ -7,11 +7,19 @@ type WallQuery<'w, 's, 'a> =
 #[derive(Component, Reflect)]
 pub struct Player {
 	speed: f32,
+	grounded: bool,
+	y_velocity: f32,
+	jump_strength: f32,
 }
 
 impl Default for Player {
 	fn default() -> Self {
-		Player { speed: 1.0 }
+		Player {
+			speed: 1.0,
+			grounded: false,
+			y_velocity: -1.0,
+			jump_strength: 3.0,
+		}
 	}
 }
 
@@ -37,23 +45,21 @@ fn camera_follow(
 }
 
 fn player_movement(
-	mut player_query: Query<(&Player, &mut Transform)>,
+	mut player_query: Query<(&mut Player, &mut Transform)>,
 	wall_query: WallQuery,
 	keyboard: Res<Input<KeyCode>>,
 	time: Res<Time>,
 ) {
-	let (player, mut transform) = player_query.single_mut();
+	let (mut player, mut transform) = player_query.single_mut();
+
+	if player.grounded && keyboard.pressed(KeyCode::Space) {
+		player.y_velocity += player.jump_strength * TILE_SIZE;
+	}
+
+	player.y_velocity += -3.0 * TILE_SIZE * time.delta_seconds();
+	let y_delta = player.y_velocity * time.delta_seconds();
 
 	let speed = player.speed * TILE_SIZE * time.delta_seconds();
-
-	let mut y_delta = 0.0;
-	if keyboard.pressed(KeyCode::W) {
-		y_delta += speed;
-	}
-	if keyboard.pressed(KeyCode::S) {
-		y_delta -= speed;
-	}
-
 	let mut x_delta = 0.0;
 	if keyboard.pressed(KeyCode::A) {
 		x_delta -= speed;
@@ -70,6 +76,10 @@ fn player_movement(
 	let target = transform.translation + Vec3::new(0.0, y_delta, 0.0);
 	if wall_collision_check(target, &wall_query) {
 		transform.translation = target;
+		player.grounded = false;
+	} else {
+		player.y_velocity = 0.0;
+		player.grounded = true;
 	}
 }
 
@@ -109,7 +119,10 @@ fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
 			..default()
 		})
 		.insert(Name::new("Player"))
-		.insert(Player { speed: 3.0 })
+		.insert(Player {
+			speed: 3.0,
+			..default()
+		})
 		.id();
 
 	let background_sprite = TextureAtlasSprite {
