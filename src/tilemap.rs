@@ -29,7 +29,7 @@ fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
 		.enumerate()
 		.flat_map(|(y, line)| {
 			// TODO(pope): Figure out how to avoid the collect allocation.
-			// Maybe the most efficient thing to do here is a nesed for-loop
+			// Maybe the most efficient thing to do here is a nested for-loop
 			//
 			// Error without collect:
 			//     `returns a reference to data owned by the current function`
