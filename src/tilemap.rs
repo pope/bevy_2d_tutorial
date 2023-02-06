@@ -50,15 +50,7 @@ fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
 		.lines()
 		.enumerate()
 		.flat_map(|(y, line)| {
-			// TODO(pope): Figure out how to avoid the collect allocation.
-			// Maybe the most efficient thing to do here is a nested for-loop
-			//
-			// Error without collect:
-			//     `returns a reference to data owned by the current function`
-			line.chars()
-				.enumerate()
-				.map(|(x, char)| (y, x, char))
-				.collect::<Vec<_>>()
+			line.chars().enumerate().map(move |(x, char)| (y, x, char))
 		})
 		.map(|(y, x, char)| {
 			let entity = commands
