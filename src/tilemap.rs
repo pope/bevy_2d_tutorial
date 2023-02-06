@@ -1,23 +1,45 @@
-use crate::{ascii::AsciiSheet, TILE_SIZE};
+use crate::{ascii::AsciiSheet, GameState, TILE_SIZE};
 use bevy::prelude::*;
 use indoc::indoc;
 
 #[derive(Component)]
+pub struct Map;
+
+#[derive(Component)]
 pub struct TileCollider;
+
+#[derive(Component)]
+pub struct EncounterSpawner;
 
 pub struct TileMapPluging;
 
 impl Plugin for TileMapPluging {
 	fn build(&self, app: &mut App) {
-		app.add_startup_system(create_simple_map);
+		app.add_system_set(
+			SystemSet::on_enter(GameState::Overworld).with_system(show_map),
+		)
+		.add_system_set(
+			SystemSet::on_exit(GameState::Overworld).with_system(hide_map),
+		)
+		.add_startup_system(create_simple_map);
 	}
+}
+
+fn show_map(mut visibility: Query<&mut Visibility, With<Map>>) {
+	let mut visibility = visibility.single_mut();
+	visibility.is_visible = true;
+}
+
+fn hide_map(mut visibility: Query<&mut Visibility, With<Map>>) {
+	let mut visibility = visibility.single_mut();
+	visibility.is_visible = false;
 }
 
 fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
 	let map = indoc! {"
 		##############
-		#......#.....#
-		#............#
+		#....~~~~~~..#
+		#....~~~~~~..#
 		#....######..#
 		#....#....#..#
 		#.........#..#
@@ -60,9 +82,15 @@ fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
 				})
 				.insert(Name::from(format!("Tile ({y}, {x})")))
 				.id();
-			if char == '#' {
-				commands.entity(entity).insert(TileCollider);
-			}
+			match char {
+				'#' => {
+					commands.entity(entity).insert(TileCollider);
+				}
+				'~' => {
+					commands.entity(entity).insert(EncounterSpawner);
+				}
+				_ => {}
+			};
 			entity
 		})
 		.collect();
@@ -70,5 +98,6 @@ fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
 	commands
 		.spawn(SpatialBundle::default())
 		.insert(Name::new("Map"))
+		.insert(Map)
 		.push_children(&tiles);
 }

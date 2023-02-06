@@ -1,17 +1,40 @@
-use crate::{ascii::AsciiSheet, tilemap::TileCollider, TILE_SIZE};
+use crate::{
+	ascii::AsciiSheet,
+	tilemap::{EncounterSpawner, TileCollider},
+	GameState, TILE_SIZE,
+};
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 
-type WallQuery<'w, 's, 'a> =
-	Query<'w, 's, (&'a Transform, (With<TileCollider>, Without<Player>))>;
+type NonPlayerTransformQuery<'w, 's, 'a, T> =
+	Query<'w, 's, (&'a Transform, (With<T>, Without<Player>))>;
 
 #[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Player {
 	speed: f32,
+	just_moved: bool,
 }
 
 impl Default for Player {
 	fn default() -> Self {
-		Player { speed: 1.0 }
+		Player {
+			speed: 1.0,
+			just_moved: false,
+		}
+	}
+}
+
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+pub struct EncounterTimer {
+	timer: Timer,
+}
+
+impl Default for EncounterTimer {
+	fn default() -> Self {
+		EncounterTimer {
+			timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+		}
 	}
 }
 
@@ -19,9 +42,60 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_startup_system(spawn_player)
-			.add_system(player_movement.label("movement"))
-			.add_system(camera_follow.after("movement"));
+		app.insert_resource(EncounterTimer::default())
+			.add_system_set(
+				SystemSet::on_enter(GameState::Overworld)
+					.with_system(show_player),
+			)
+			.add_system_set(
+				SystemSet::on_exit(GameState::Overworld)
+					.with_system(hide_player),
+			)
+			.add_system_set(
+				SystemSet::on_update(GameState::Overworld)
+					.with_system(player_movement.label("movement"))
+					.with_system(player_encounter_checking.after("movement"))
+					.with_system(camera_follow.after("movement")),
+			)
+			.add_startup_system(spawn_player);
+	}
+}
+
+fn hide_player(mut player_visibility: Query<&mut Visibility, With<Player>>) {
+	set_player_visibility(&mut player_visibility, false);
+}
+
+fn show_player(mut player_visibility: Query<&mut Visibility, With<Player>>) {
+	set_player_visibility(&mut player_visibility, true);
+}
+
+fn set_player_visibility(
+	player_visibility: &mut Query<&mut Visibility, With<Player>>,
+	is_visible: bool,
+) {
+	let mut player_visibility = player_visibility.single_mut();
+	player_visibility.is_visible = is_visible;
+}
+
+fn player_encounter_checking(
+	player_query: Query<(&Player, &Transform)>,
+	encounter_query: NonPlayerTransformQuery<EncounterSpawner>,
+	time: Res<Time>,
+	mut encounter_timer: ResMut<EncounterTimer>,
+	mut state: ResMut<State<GameState>>,
+) {
+	let (player, transform) = player_query.single();
+
+	if player.just_moved
+		&& player_collides(transform.translation, &encounter_query)
+	{
+		let timer = encounter_timer.timer.tick(time.delta());
+		if timer.just_finished() {
+			println!("You're in the danger zone!");
+			state
+				.set(GameState::Combat)
+				.expect("Failed to change states");
+		}
 	}
 }
 
@@ -37,12 +111,13 @@ fn camera_follow(
 }
 
 fn player_movement(
-	mut player_query: Query<(&Player, &mut Transform)>,
-	wall_query: WallQuery,
+	mut player_query: Query<(&mut Player, &mut Transform)>,
+	wall_query: NonPlayerTransformQuery<TileCollider>,
 	keyboard: Res<Input<KeyCode>>,
 	time: Res<Time>,
 ) {
-	let (player, mut transform) = player_query.single_mut();
+	let (mut player, mut transform) = player_query.single_mut();
+	player.just_moved = false;
 
 	let speed = player.speed * TILE_SIZE * time.delta_seconds();
 
@@ -62,32 +137,36 @@ fn player_movement(
 		x_delta += speed;
 	}
 
+	if x_delta == 0.0 && y_delta == 0.0 {
+		return;
+	}
+
+	player.just_moved = true;
+
 	let target = transform.translation + Vec3::new(x_delta, 0.0, 0.0);
-	if wall_collision_check(target, &wall_query) {
+	if !player_collides(target, &wall_query) {
 		transform.translation = target;
 	}
 
 	let target = transform.translation + Vec3::new(0.0, y_delta, 0.0);
-	if wall_collision_check(target, &wall_query) {
+	if !player_collides(target, &wall_query) {
 		transform.translation = target;
 	}
 }
 
-fn wall_collision_check(
+fn player_collides<C: Component>(
 	target_player_pos: Vec3,
-	wall_query: &WallQuery,
+	query: &NonPlayerTransformQuery<C>,
 ) -> bool {
-	wall_query
-		.iter()
-		.map(|wall_transform| {
-			collide(
-				target_player_pos,
-				Vec2::splat(TILE_SIZE * 0.9),
-				wall_transform.0.translation,
-				Vec2::splat(TILE_SIZE),
-			)
-		})
-		.all(|collision| collision.is_none())
+	query.iter().any(|transform| {
+		collide(
+			target_player_pos,
+			Vec2::splat(TILE_SIZE * 0.9),
+			transform.0.translation,
+			Vec2::splat(TILE_SIZE),
+		)
+		.is_some()
+	})
 }
 
 fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
@@ -109,7 +188,10 @@ fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
 			..default()
 		})
 		.insert(Name::new("Player"))
-		.insert(Player { speed: 3.0 })
+		.insert(Player {
+			speed: 3.0,
+			..default()
+		})
 		.id();
 
 	let background_sprite = TextureAtlasSprite {

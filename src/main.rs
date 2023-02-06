@@ -1,11 +1,13 @@
 use bevy::{prelude::*, render::camera::ScalingMode};
 
 mod ascii;
+mod combat;
 mod debug;
 mod player;
 mod tilemap;
 
 use ascii::AsciiPlugin;
+use combat::CombatPlugin;
 use debug::DebugPlugin;
 use player::PlayerPlugin;
 use tilemap::TileMapPluging;
@@ -15,8 +17,15 @@ pub const ASPECT_RATIO: f32 = 16.0 / 9.0;
 pub const HEIGHT: f32 = 720.0;
 pub const TILE_SIZE: f32 = 0.1;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+pub enum GameState {
+	Overworld,
+	Combat,
+}
+
 fn main() {
 	App::new()
+		.add_state(GameState::Overworld)
 		.insert_resource(ClearColor(CLEAR))
 		.add_startup_system(spawn_camera)
 		.add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()).set(
@@ -32,6 +41,7 @@ fn main() {
 			},
 		))
 		.add_plugin(AsciiPlugin)
+		.add_plugin(CombatPlugin)
 		.add_plugin(DebugPlugin)
 		.add_plugin(PlayerPlugin)
 		.add_plugin(TileMapPluging)
